@@ -13,14 +13,24 @@ const (
 )
 
 func main() {
-	conn, err := net.Listen("tcp", fmt.Sprintf("%s:%d", TCP_HOST, TCP_PORT))
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", TCP_HOST, TCP_PORT))
 	if err != nil {
 		logAndThrowError(err, fmt.Sprintf("Failed to bind to port: %d", TCP_PORT))
 	}
 	
-	_, err = conn.Accept()
+	conn, err := l.Accept()
 	if err != nil {
 		logAndThrowError(err, "Error accepting connection")
+	}
+
+	log.Println("Connection accepted")
+
+	statusLine := "HTTP/1.1 200 OK\r\n"
+	headers := "\r\n"
+
+	_, err = conn.Write([]byte(statusLine + headers))
+	if err != nil {
+		logAndThrowError(err, "Error while writing data")
 	}
 }
 
