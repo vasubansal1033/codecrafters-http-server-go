@@ -2,26 +2,29 @@ package main
 
 import (
 	"fmt"
-	// Uncomment this block to pass the first stage
-	// "net"
-	// "os"
+	"net"
+	"os"
+	"log"
+)
+
+const (
+	TCP_HOST = "0.0.0.0"
+	TCP_PORT = 4221
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
-	fmt.Println("Logs from your program will appear here!")
+	conn, err := net.Listen("tcp", fmt.Sprintf("%s:%d", TCP_HOST, TCP_PORT))
+	if err != nil {
+		logAndThrowError(err, fmt.Sprintf("Failed to bind to port: %d", TCP_PORT))
+	}
+	
+	_, err = conn.Accept()
+	if err != nil {
+		logAndThrowError(err, "Error accepting connection")
+	}
+}
 
-	// Uncomment this block to pass the first stage
-	//
-	// l, err := net.Listen("tcp", "0.0.0.0:4221")
-	// if err != nil {
-	// 	fmt.Println("Failed to bind to port 4221")
-	// 	os.Exit(1)
-	// }
-	//
-	// _, err = l.Accept()
-	// if err != nil {
-	// 	fmt.Println("Error accepting connection: ", err.Error())
-	// 	os.Exit(1)
-	// }
+func logAndThrowError(err error, errorMessage string) {
+	log.Fatalf("%s: %v", errorMessage, err)
+	os.Exit(1)
 }
