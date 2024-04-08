@@ -13,7 +13,9 @@ const (
 	TCP_HOST = "0.0.0.0"
 	TCP_PORT = 4221
 
-	ECHO_PATH = "/echo/"
+	ECHO_PATH       = "/echo/"
+	USER_AGENT_PATH = "/user-agent"
+	USER_AGENT      = "User-Agent"
 )
 
 func readRequestString(conn net.Conn) string {
@@ -33,6 +35,11 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
 		response.StatusCode = 200
 		responseBody := r.Path[len(ECHO_PATH):]
+		response.addBody("text/plain", responseBody)
+	} else if strings.HasPrefix(r.Path, USER_AGENT_PATH) {
+		response.StatusCode = 200
+		responseBody := r.Headers[USER_AGENT]
+
 		response.addBody("text/plain", responseBody)
 	} else {
 		// not found

@@ -9,6 +9,7 @@ type httpRequest struct {
 	Method      string
 	Path        string
 	HttpVersion string
+	Headers     map[string]string
 }
 
 func (r *httpRequest) parseStartLine(requestStartLine string) {
@@ -25,6 +26,15 @@ func (r *httpRequest) parseStartLine(requestStartLine string) {
 	r.HttpVersion = scanner.Text()
 }
 
+func (r *httpRequest) parseHeaderLine(headerLine string) {
+	if r.Headers == nil {
+		r.Headers = map[string]string{}
+	}
+
+	parts := strings.Split(headerLine, ":")
+	r.Headers[strings.Trim(parts[0], " ")] = strings.Trim(parts[1], " ")
+}
+
 func parseHttpRequest(requestString string) *httpRequest {
 	httpRequest := &httpRequest{}
 
@@ -36,6 +46,16 @@ func parseHttpRequest(requestString string) *httpRequest {
 	requestStartLine := requestScanner.Text()
 
 	httpRequest.parseStartLine(requestStartLine)
+
+	for requestScanner.Scan() {
+		headerLine := requestScanner.Text()
+		if headerLine == "" {
+			break
+		}
+
+		httpRequest.parseHeaderLine(headerLine)
+	}
+
 	return httpRequest
 }
 
