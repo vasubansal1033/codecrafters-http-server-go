@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	// "strings"
 )
 
@@ -25,13 +26,19 @@ func readRequestString(conn net.Conn) string {
 
 func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	response := NotFoundResponse
+	headers := "\r\n"
+	responseBody := ""
 	if r.Path == "/" {
 		response = OkResponse
+	} else if strings.HasPrefix(r.Path, "/echo/") {
+		responseContent := r.Path[len("/echo/"):]
+		response = OkResponse
+
+		headers = "Content-Type: text/plain\r\n" + fmt.Sprintf("Content-Length: %d\r\n", len(responseContent)) + "\r\n"
+		responseBody = responseContent + "\r\n"
 	}
 
-	headers := "\r\n"
-
-	_, err := conn.Write([]byte(response + headers))
+	_, err := conn.Write([]byte(response + headers + responseBody))
 	if err != nil {
 		logAndThrowError(err, "Error while writing data")
 	}
