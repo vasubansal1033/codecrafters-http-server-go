@@ -61,6 +61,8 @@ func handleConnection(conn net.Conn) {
 	httpRequest := newHttpRequest(requestString)
 
 	respondToHttpRequest(conn, httpRequest)
+
+	conn.Close()
 }
 
 func main() {
@@ -76,9 +78,9 @@ func main() {
 		}
 
 		log.Println("Connection accepted")
-		handleConnection(conn)
 
-		conn.Close()
+		// handle each incoming connection in new goroutine
+		go handleConnection(conn)
 	}
 }
 
