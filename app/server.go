@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -34,6 +35,7 @@ func readRequestString(conn net.Conn) string {
 	return string(readBuffer)
 }
 
+// TODO: refactor to map a handler func to each request path and verb [like net/http]
 func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	response := &httpResponse{}
 	if r.Path == "/" {
@@ -49,17 +51,38 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 		response.addBody(PLAIN_TEXT, responseBody)
 	} else if strings.HasPrefix(r.Path, FILE_PATH) {
 		filePath := path.Join(WORKING_DIRECTORY, r.Path[len(FILE_PATH):])
-		if _, err := os.Stat(filePath); err != nil {
-			response.StatusCode = 404
-		} else {
-			response.StatusCode = 200
-			fileContent, err := os.ReadFile(filePath)
+
+		if r.Method == "GET" {
+			if _, err := os.Stat(filePath); err != nil {
+				response.StatusCode = 404
+			} else {
+				response.StatusCode = 200
+				fileContent, err := os.ReadFile(filePath)
+				if err != nil {
+					logAndThrowError(err, fmt.Sprintf("Error while reading file: %s", filePath))
+				}
+
+				responseBody := string(fileContent)
+				response.addBody(OCTET_STREAM, responseBody)
+			}
+		} else if r.Method == "POST" {
+			response.StatusCode = 201
+
+			f, err := os.Create(filePath)
+			defer func() {
+				err := f.Close()
+				if err != nil {
+					logAndThrowError(err, "Error while closing the file")
+				}
+			}()
+
 			if err != nil {
-				logAndThrowError(err, fmt.Sprintf("Error while reading file: %s", filePath))
+				logAndThrowError(err, fmt.Sprintf("Error while creating file: %s", filePath))
 			}
 
-			responseBody := string(fileContent)
-			response.addBody(OCTET_STREAM, responseBody)
+			w := bufio.NewWriter(f)
+			w.Write(r.Body)
+			w.Flush()
 		}
 	} else {
 		// not found

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"strings"
 )
 
@@ -10,6 +11,8 @@ type httpRequest struct {
 	Path        string
 	HttpVersion string
 	Headers     map[string]string
+
+	Body []byte
 }
 
 func (r *httpRequest) parseStartLine(requestStartLine string) {
@@ -47,6 +50,7 @@ func parseHttpRequest(requestString string) *httpRequest {
 
 	httpRequest.parseStartLine(requestStartLine)
 
+	// read header lines
 	for requestScanner.Scan() {
 		headerLine := requestScanner.Text()
 		if headerLine == "" {
@@ -55,6 +59,10 @@ func parseHttpRequest(requestString string) *httpRequest {
 
 		httpRequest.parseHeaderLine(headerLine)
 	}
+
+	requestScanner.Scan()
+	httpRequest.Body = requestScanner.Bytes()
+	httpRequest.Body = bytes.ReplaceAll(httpRequest.Body, []byte{0}, []byte{})
 
 	return httpRequest
 }

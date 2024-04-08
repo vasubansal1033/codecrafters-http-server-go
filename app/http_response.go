@@ -57,6 +57,8 @@ func (response *httpResponse) writeStatus() {
 	switch response.StatusCode {
 	case 200:
 		status = "OK"
+	case 201:
+		status = "Created"
 	case 404:
 		status = "Not Found"
 	}
