@@ -12,6 +12,8 @@ import (
 const (
 	TCP_HOST = "0.0.0.0"
 	TCP_PORT = 4221
+
+	ECHO_PATH = "/echo/"
 )
 
 func readRequestString(conn net.Conn) string {
@@ -25,22 +27,26 @@ func readRequestString(conn net.Conn) string {
 }
 
 func respondToHttpRequest(conn net.Conn, r *httpRequest) {
-	response := NotFoundResponse
-	headers := "\r\n"
-	responseBody := ""
+	response := &httpResponse{}
 	if r.Path == "/" {
-		response = OkResponse
-	} else if strings.HasPrefix(r.Path, "/echo/") {
-		responseContent := r.Path[len("/echo/"):]
-		response = OkResponse
-
-		headers = "Content-Type: text/plain\r\n" + fmt.Sprintf("Content-Length: %d\r\n", len(responseContent)) + "\r\n"
-		responseBody = responseContent + "\r\n"
+		response.StatusCode = 200
+	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
+		response.StatusCode = 200
+		responseBody := r.Path[len(ECHO_PATH):]
+		response.addBody("text/plain", responseBody)
+	} else {
+		// not found
+		response.StatusCode = 404
 	}
 
-	_, err := conn.Write([]byte(response + headers + responseBody))
+	responseString, err := response.toString()
 	if err != nil {
-		logAndThrowError(err, "Error while writing data")
+		logAndThrowError(err, "Error while creating response string.")
+	}
+
+	_, err = conn.Write([]byte(responseString))
+	if err != nil {
+		logAndThrowError(err, "Error while writing response data")
 	}
 }
 
