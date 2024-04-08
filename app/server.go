@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	// "strings"
 )
 
 const (
@@ -70,14 +69,17 @@ func main() {
 		logAndThrowError(err, fmt.Sprintf("Failed to bind to port: %d", TCP_PORT))
 	}
 
-	conn, err := l.Accept()
-	if err != nil {
-		logAndThrowError(err, "Error accepting connection")
-	}
-	defer conn.Close()
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			logAndThrowError(err, "Error accepting connection")
+		}
 
-	log.Println("Connection accepted")
-	handleConnection(conn)
+		log.Println("Connection accepted")
+		handleConnection(conn)
+
+		conn.Close()
+	}
 }
 
 func logAndThrowError(err error, errorMessage string) {
