@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"log"
 	"net"
@@ -45,19 +47,10 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 		response.StatusCode = 200
 	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
 		response.StatusCode = 200
-		if r.Method == "GET" {
-			if _, ok := r.Headers[ACCEPT_ENCODING]; ok {
-				encodingHeaders := strings.Split(r.Headers[ACCEPT_ENCODING], ",")
-				for _, encodingHeader := range encodingHeaders {
-					if strings.TrimSpace(encodingHeader) == GZIP {
-						response.addHeader(CONTENT_ENCODING, GZIP)
-					}
-				}
-			}
-		}
+		responseBody := getEchoResponseBody(r, response)
 
-		responseBody := r.Path[len(ECHO_PATH):]
 		response.addBody(PLAIN_TEXT, responseBody)
+
 	} else if strings.HasPrefix(r.Path, USER_AGENT_PATH) {
 		response.StatusCode = 200
 		responseBody := r.Headers[USER_AGENT]
@@ -112,6 +105,38 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	if err != nil {
 		logAndThrowError(err, "Error while writing response data")
 	}
+}
+
+func getEchoResponseBody(r *httpRequest, response *httpResponse) string {
+	if r.Method == "GET" {
+		if _, ok := r.Headers[ACCEPT_ENCODING]; ok {
+			encodingHeaders := strings.Split(r.Headers[ACCEPT_ENCODING], ",")
+			for _, encodingHeader := range encodingHeaders {
+				if strings.TrimSpace(encodingHeader) == GZIP {
+					response.addHeader(CONTENT_ENCODING, GZIP)
+
+					responseBody := r.Path[len(ECHO_PATH):]
+
+					var compressedBody bytes.Buffer
+					gz := gzip.NewWriter(&compressedBody)
+					_, err := gz.Write([]byte(responseBody))
+					if err != nil {
+						logAndThrowError(err, "Error while writing to gzip writer")
+					}
+
+					err = gz.Close()
+					if err != nil {
+						logAndThrowError(err, "Error while closing gzip writer")
+					}
+
+					return compressedBody.String()
+				}
+			}
+		}
+	}
+
+	responseBody := r.Path[len(ECHO_PATH):]
+	return responseBody
 }
 
 func handleConnection(conn net.Conn) {
