@@ -5,11 +5,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 	"path"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -30,19 +33,77 @@ const (
 
 var WORKING_DIRECTORY string
 
+// read one request at a time from connection
 func readRequestString(conn net.Conn) string {
-	readBuffer := make([]byte, 1024)
-	_, err := conn.Read(readBuffer)
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
+	reader := bufio.NewReader(conn)
+
+	// Read the request line first
+	requestLine, err := reader.ReadString('\n')
 	if err != nil {
-		logAndThrowError(err, "Failed to read request bytes")
+		if err == io.EOF {
+			return ""
+		}
+		logAndThrowError(err, "Failed to read request line")
 	}
 
-	return string(readBuffer)
+	requestString := strings.TrimRight(requestLine, CRLF)
+
+	// read headers
+	contentLength := 0
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			logAndThrowError(err, "Failed to read request bytes")
+		}
+
+		requestString += line
+
+		// Check if this line is a header or empty line
+		if line == CRLF {
+			break
+		}
+
+		if strings.HasPrefix(strings.ToLower(line), strings.ToLower(CONTENT_LENGTH)) {
+			parts := strings.Split(line, ":")
+			if len(parts) == 2 {
+				contentLength, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+				if err != nil {
+					logAndThrowError(err, "Failed to parse content length")
+				}
+			}
+		}
+	}
+
+	// Read body if Content-Length is specified
+	if contentLength > 0 {
+		body := make([]byte, contentLength)
+		_, err := io.ReadFull(reader, body)
+		if err != nil {
+			logAndThrowError(err, "Failed to read body")
+		}
+
+		requestString += string(body)
+	}
+
+	return requestString
 }
 
 // TODO: refactor to map a handler func to each request path and verb [like net/http]
 func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	response := &httpResponse{}
+
+	// Add Connection header based on request
+	if shouldCloseConnection(r) {
+		response.addHeader("Connection", "close")
+	} else {
+		response.addHeader("Connection", "keep-alive")
+	}
+
 	if r.Path == "/" {
 		response.StatusCode = 200
 	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
@@ -140,12 +201,39 @@ func getEchoResponseBody(r *httpRequest, response *httpResponse) string {
 }
 
 func handleConnection(conn net.Conn) {
-	requestString := readRequestString(conn)
-	httpRequest := newHttpRequest(requestString)
+	defer conn.Close()
 
-	respondToHttpRequest(conn, httpRequest)
+	for {
+		requestString := readRequestString(conn)
+		if requestString == "" {
+			// connection closed by client
+			return
+		}
 
-	conn.Close()
+		httpRequest := newHttpRequest(requestString)
+		shouldClose := shouldCloseConnection(httpRequest)
+
+		respondToHttpRequest(conn, httpRequest)
+
+		if shouldClose {
+			return
+		}
+	}
+}
+
+func shouldCloseConnection(r *httpRequest) bool {
+	// Check Connection header
+	if connectionHeader, exists := r.Headers["Connection"]; exists {
+		return strings.ToLower(strings.TrimSpace(connectionHeader)) == "close"
+	}
+
+	// Check HTTP version - HTTP/1.0 defaults to close, HTTP/1.1 defaults to keep-alive
+	if r.HttpVersion == "HTTP/1.0" {
+		return true
+	}
+
+	// HTTP/1.1 defaults to keep-alive unless Connection: close is specified
+	return false
 }
 
 func main() {

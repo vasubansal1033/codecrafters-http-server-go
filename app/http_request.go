@@ -35,7 +35,7 @@ func (r *httpRequest) parseHeaderLine(headerLine string) {
 	}
 
 	parts := strings.Split(headerLine, ":")
-	r.Headers[strings.Trim(parts[0], " ")] = strings.Trim(parts[1], " ")
+	r.Headers[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 }
 
 func parseHttpRequest(requestString string) *httpRequest {

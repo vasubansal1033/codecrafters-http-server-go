@@ -73,7 +73,6 @@ func (response *httpResponse) writeStatus() {
 
 func (response *httpResponse) writeBody() {
 	response.responseString.WriteString(response.Body)
-	response.responseString.WriteString(CRLF)
 }
 
 func (response *httpResponse) toString() (string, error) {
