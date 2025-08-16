@@ -49,7 +49,7 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 			if _, ok := r.Headers[ACCEPT_ENCODING]; ok {
 				encodingHeaders := strings.Split(r.Headers[ACCEPT_ENCODING], ",")
 				for _, encodingHeader := range encodingHeaders {
-					if encodingHeader == GZIP {
+					if strings.TrimSpace(encodingHeader) == GZIP {
 						response.addHeader(CONTENT_ENCODING, GZIP)
 					}
 				}
