@@ -47,8 +47,11 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 		response.StatusCode = 200
 		if r.Method == "GET" {
 			if _, ok := r.Headers[ACCEPT_ENCODING]; ok {
-				if r.Headers[ACCEPT_ENCODING] == GZIP {
-					response.addHeader(CONTENT_ENCODING, GZIP)
+				encodingHeaders := strings.Split(r.Headers[ACCEPT_ENCODING], ",")
+				for _, encodingHeader := range encodingHeaders {
+					if encodingHeader == GZIP {
+						response.addHeader(CONTENT_ENCODING, GZIP)
+					}
 				}
 			}
 		}
