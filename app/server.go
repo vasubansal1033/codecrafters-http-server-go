@@ -18,9 +18,12 @@ const (
 	USER_AGENT_PATH = "/user-agent"
 	FILE_PATH       = "/files/"
 
-	USER_AGENT   = "User-Agent"
-	PLAIN_TEXT   = "text/plain"
-	OCTET_STREAM = "application/octet-stream"
+	USER_AGENT       = "User-Agent"
+	PLAIN_TEXT       = "text/plain"
+	OCTET_STREAM     = "application/octet-stream"
+	ACCEPT_ENCODING  = "Accept-Encoding"
+	CONTENT_ENCODING = "Content-Encoding"
+	GZIP             = "gzip"
 )
 
 var WORKING_DIRECTORY string
@@ -42,6 +45,14 @@ func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 		response.StatusCode = 200
 	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
 		response.StatusCode = 200
+		if r.Method == "GET" {
+			if _, ok := r.Headers[ACCEPT_ENCODING]; ok {
+				if r.Headers[ACCEPT_ENCODING] == GZIP {
+					response.addHeader(CONTENT_ENCODING, GZIP)
+				}
+			}
+		}
+
 		responseBody := r.Path[len(ECHO_PATH):]
 		response.addBody(PLAIN_TEXT, responseBody)
 	} else if strings.HasPrefix(r.Path, USER_AGENT_PATH) {
