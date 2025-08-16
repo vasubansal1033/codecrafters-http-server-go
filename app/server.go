@@ -93,70 +93,116 @@ func readRequestString(conn net.Conn) string {
 	return requestString
 }
 
-// TODO: refactor to map a handler func to each request path and verb [like net/http]
 func respondToHttpRequest(conn net.Conn, r *httpRequest) {
 	response := &httpResponse{}
 
-	// Add Connection header based on request
+	addConnectionHeader(response, r)
+
+	handleRequest(r, response)
+
+	sendResponse(conn, response)
+}
+
+func addConnectionHeader(response *httpResponse, r *httpRequest) {
 	if shouldCloseConnection(r) {
 		response.addHeader("Connection", "close")
 	} else {
 		response.addHeader("Connection", "keep-alive")
 	}
+}
 
-	if r.Path == "/" {
-		response.StatusCode = 200
-	} else if strings.HasPrefix(r.Path, ECHO_PATH) {
-		response.StatusCode = 200
-		responseBody := getEchoResponseBody(r, response)
+func handleRequest(r *httpRequest, response *httpResponse) {
+	switch {
+	case r.Path == "/":
+		handleRootPath(response)
+	case strings.HasPrefix(r.Path, ECHO_PATH):
+		handleEchoPath(r, response)
+	case strings.HasPrefix(r.Path, USER_AGENT_PATH):
+		handleUserAgentPath(r, response)
+	case strings.HasPrefix(r.Path, FILE_PATH):
+		handleFilePath(r, response)
+	default:
+		handleNotFound(response)
+	}
+}
 
-		response.addBody(PLAIN_TEXT, responseBody)
+// handleRootPath handles requests to the root path
+func handleRootPath(response *httpResponse) {
+	response.StatusCode = 200
+}
 
-	} else if strings.HasPrefix(r.Path, USER_AGENT_PATH) {
-		response.StatusCode = 200
-		responseBody := r.Headers[USER_AGENT]
+// handleEchoPath handles requests to the echo path
+func handleEchoPath(r *httpRequest, response *httpResponse) {
+	response.StatusCode = 200
+	responseBody := getEchoResponseBody(r, response)
+	response.addBody(PLAIN_TEXT, responseBody)
+}
 
-		response.addBody(PLAIN_TEXT, responseBody)
-	} else if strings.HasPrefix(r.Path, FILE_PATH) {
-		filePath := path.Join(WORKING_DIRECTORY, r.Path[len(FILE_PATH):])
+// handleUserAgentPath handles requests to the user-agent path
+func handleUserAgentPath(r *httpRequest, response *httpResponse) {
+	response.StatusCode = 200
+	responseBody := r.Headers[USER_AGENT]
+	response.addBody(PLAIN_TEXT, responseBody)
+}
 
-		if r.Method == "GET" {
-			if _, err := os.Stat(filePath); err != nil {
-				response.StatusCode = 404
-			} else {
-				response.StatusCode = 200
-				fileContent, err := os.ReadFile(filePath)
-				if err != nil {
-					logAndThrowError(err, fmt.Sprintf("Error while reading file: %s", filePath))
-				}
+// handleFilePath handles requests to the files path
+func handleFilePath(r *httpRequest, response *httpResponse) {
+	filePath := path.Join(WORKING_DIRECTORY, r.Path[len(FILE_PATH):])
 
-				responseBody := string(fileContent)
-				response.addBody(OCTET_STREAM, responseBody)
-			}
-		} else if r.Method == "POST" {
-			response.StatusCode = 201
+	switch r.Method {
+	case "GET":
+		handleFileGet(filePath, response)
+	case "POST":
+		handleFilePost(filePath, r, response)
+	default:
+		handleNotFound(response)
+	}
+}
 
-			f, err := os.Create(filePath)
-			defer func() {
-				err := f.Close()
-				if err != nil {
-					logAndThrowError(err, "Error while closing the file")
-				}
-			}()
-
-			if err != nil {
-				logAndThrowError(err, fmt.Sprintf("Error while creating file: %s", filePath))
-			}
-
-			w := bufio.NewWriter(f)
-			w.Write(r.Body)
-			w.Flush()
-		}
-	} else {
-		// not found
+// handleFileGet handles GET requests for files
+func handleFileGet(filePath string, response *httpResponse) {
+	if _, err := os.Stat(filePath); err != nil {
 		response.StatusCode = 404
+		return
 	}
 
+	response.StatusCode = 200
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		logAndThrowError(err, fmt.Sprintf("Error while reading file: %s", filePath))
+	}
+
+	responseBody := string(fileContent)
+	response.addBody(OCTET_STREAM, responseBody)
+}
+
+// handleFilePost handles POST requests for files
+func handleFilePost(filePath string, r *httpRequest, response *httpResponse) {
+	response.StatusCode = 201
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		logAndThrowError(err, fmt.Sprintf("Error while creating file: %s", filePath))
+	}
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			logAndThrowError(err, "Error while closing the file")
+		}
+	}()
+
+	w := bufio.NewWriter(f)
+	w.Write(r.Body)
+	w.Flush()
+}
+
+// handleNotFound handles requests to non-existent paths
+func handleNotFound(response *httpResponse) {
+	response.StatusCode = 404
+}
+
+// sendResponse sends the response to the client
+func sendResponse(conn net.Conn, response *httpResponse) {
 	responseString, err := response.toString()
 	if err != nil {
 		logAndThrowError(err, "Error while creating response string.")
